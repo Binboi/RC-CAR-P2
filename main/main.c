@@ -7,7 +7,7 @@
 //git push -u origin main
 
 ////////Device 2/////////////////////////
-//git pull
+//git pull/
 
 
 #include <stdio.h>
