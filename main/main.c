@@ -4,7 +4,7 @@
 //Modify file
 //git add .
 //git commit -m "Describe your changes"
-//git push
+//git push -u origin main
 
 ////////Device 2/////////////////////////
 //git pull
