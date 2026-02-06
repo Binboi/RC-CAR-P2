@@ -1,5 +1,14 @@
 
-//GITHUB PULL TEST
+
+////////DEVICE 1/////////////////////////
+//Modify file
+//git add .
+//git commit -m "Describe your changes"
+//git push
+
+////////Device 2/////////////////////////
+//git pull
+
 
 #include <stdio.h>
 #include "driver/adc.h"
