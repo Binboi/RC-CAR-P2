@@ -9,11 +9,6 @@
 ////////Device 2/////////////////////////
 //git pull
 
-///MORE TESTS///
-
-
-
-
 #include <stdio.h>
 #include "driver/adc.h"
 #include "driver/gpio.h"
