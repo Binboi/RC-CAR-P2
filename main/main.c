@@ -37,6 +37,8 @@ float right_P, right_I, right_D, Pk_r, Ik_r, Dk_r;
 int PID_resolution;
 float target_speed_left;
 float target_speed_right;
+float PID_left;
+float PID_right;
 
 void input_init();
 void servo_init();
@@ -326,15 +328,17 @@ void PID(){
     target_speed_left = duty_throttle + (steering_sens * steering_k);
     target_speed_right = duty_throttle - (steering_sens * steering_k);
 
-    Pk_l = ; Ik_l = ; Dk_l = ;
+    Pk_l = 2; Ik_l = 0.05; Dk_l = 1;
     left_P = target_speed_left - duty_throttle;
     left_I = (target_speed_left - duty_throttle) * PID_resolution;
     left_D = (target_speed_left - duty_throttle) / PID_resolution;
+    PID_left = left_P + left_I + left_D;
 
-    Pk_l = ; Ik_l = ; Dk_l = ;
+    Pk_l = 2; Ik_l = 0.05; Dk_l = 1;
     right_P = target_speed_right - duty_throttle;
     right_I = (target_speed_right - duty_throttle) * PID_resolution;
     right_D = (target_speed_right - duty_throttle) / PID_resolution;
+    PID_right = right_P + right_I + right_D;
 
     vTaskDelay(PID_resolution / portTICK_PERIOD_MS);
 }
