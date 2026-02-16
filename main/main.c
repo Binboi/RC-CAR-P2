@@ -29,6 +29,14 @@ int xybPins[] = {13, 25, 14};
 int xVal, yVal, bVal;
 int duty_steering;
 int duty_throttle;
+int angle;
+float steering_k;
+float steering_sens;
+float left_P, left_I, left_D, Pk_l, Ik_l, Dk_l;
+float right_P, right_I, right_D, Pk_r, Ik_r, Dk_r;
+int PID_resolution;
+float target_speed_left;
+float target_speed_right;
 
 void input_init();
 void servo_init();
@@ -36,6 +44,8 @@ void getVal();
 void set_servo_DC();
 void set_throttle_DC();
 void printVal_background(void *pvParameters);
+void diff_calc();
+void PID();
 void fwd();
 void rev();
 void brake();
@@ -273,6 +283,60 @@ void set_throttle_DC(){
 
     }
 
+}
+
+void diff_calc(){
+
+    if(duty_steering == 80){
+
+        steering_k = -1;
+    
+    }
+
+    if(duty_steering == 493){
+
+        steering_k = 1;
+    
+    }
+
+    if(duty_steering == 282){
+
+        steering_k = 0;
+    }
+
+    if(duty_steering > 282){
+
+        steering_k = (duty_steering - 282) / (493 - 282) ;
+
+    }
+
+    if(duty_steering < 282){
+
+        steering_k =  (abs(duty_steering - 282)) / (abs(80 - 282));
+
+    }
+
+}
+
+void PID(){
+
+    PID_resolution = 30;
+    steering_sens = 1.5;  //change depending on duty_throttle vs duty_steering scale
+
+    target_speed_left = duty_throttle + (steering_sens * steering_k);
+    target_speed_right = duty_throttle - (steering_sens * steering_k);
+
+    Pk_l = ; Ik_l = ; Dk_l = ;
+    left_P = target_speed_left - duty_throttle;
+    left_I = (target_speed_left - duty_throttle) * PID_resolution;
+    left_D = (target_speed_left - duty_throttle) / PID_resolution;
+
+    Pk_l = ; Ik_l = ; Dk_l = ;
+    right_P = target_speed_right - duty_throttle;
+    right_I = (target_speed_right - duty_throttle) * PID_resolution;
+    right_D = (target_speed_right - duty_throttle) / PID_resolution;
+
+    vTaskDelay(PID_resolution / portTICK_PERIOD_MS);
 }
 
 void fwd(){
