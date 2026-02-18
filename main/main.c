@@ -25,32 +25,34 @@
 #define EN1 26
 #define EN2 27
 
-int xybPins[] = {13, 25, 14};
 int xVal, yVal, bVal;
 int duty_steering;
 int duty_throttle;
 int angle;
 float steering_k;
 float steering_sens;
-float left_P, left_I, left_D, Pk_l, Ik_l, Dk_l;
-float right_P, right_I, right_D, Pk_r, Ik_r, Dk_r;
-int PID_resolution;
 float target_speed_left;
 float target_speed_right;
-float PID_left;
-float PID_right;
 
 void input_init();
 void servo_init();
 void getVal();
-void set_servo_DC();
+void set_steering_DC();
 void set_throttle_DC();
 void printVal_background(void *pvParameters);
-void diff_calc();
-void PID();
 void fwd();
 void rev();
 void brake();
+
+
+////////////UNUSED FUNCS AND VARS FOR LATER USE////////////////////
+int left_setpoint, right_setpoint;
+int output_left, output_right;
+void diff_calc();
+
+void ackerman();
+void PID(int setpoint, int val);
+///////////////////////////////////////////////////////////////////
 
 void app_main(){
 
@@ -66,7 +68,7 @@ void app_main(){
     while(1){
 
         getVal();
-        set_servo_DC();
+        set_steering_DC();
         set_throttle_DC();
 
         if(yVal > 2950){
@@ -151,7 +153,7 @@ void servo_init(){
     // Setup the PWM channel for the steering
     ledc_channel_config_t channel_config = {
         .gpio_num = servo,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .speed_mode = LEDC_LOW_SPEED_MODE,  
         .channel = LEDC_CHANNEL_0,
         .timer_sel = LEDC_TIMER_0,
         .duty = 0,
@@ -174,7 +176,7 @@ void servo_init(){
     ledc_channel_config_t channel_config3 = {
         .gpio_num = EN2,
         .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_1,
+        .channel = LEDC_CHANNEL_2,
         .timer_sel = LEDC_TIMER_0,
         .duty = 0,
         .hpoint = 0
@@ -194,7 +196,7 @@ void getVal(){
 
 }
 
-void set_servo_DC(){
+void set_steering_DC(){
 
 //Duty cycles from trial and error
 //Mid point: 282
@@ -257,18 +259,53 @@ void set_throttle_DC(){
     }
 
     // Stores the new duty cycle variable in memory
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty_throttle);
+    // Sets the throttle PWM duty cycle to "duty_throttle"
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
+
+    // Stores the new duty cycle variable in memory
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2, duty_throttle);
     // Sets the throttle PWM duty cycle to "duty_throttle"
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_2);
 
-    // Stores the new duty cycle variable in memory
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_3, duty_throttle);
-    // Sets the throttle PWM duty cycle to "duty_throttle"
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_3);
+}
+
+void fwd(){
+
+    //left motor
+    gpio_set_level(IN1, 1);
+    gpio_set_level(IN2, 0);
+
+    //right motor
+    gpio_set_level(IN3, 1);
+    gpio_set_level(IN4, 0);
 
 }
 
-    void printVal_background(void *pvParameters){
+void rev(){
+
+    //left motor
+    gpio_set_level(IN1, 0);
+    gpio_set_level(IN2, 1); 
+
+    //right motor
+    gpio_set_level(IN3, 0);
+    gpio_set_level(IN4, 1); 
+}
+
+void brake(){
+
+    //left motor
+    gpio_set_level(IN1, 1);
+    gpio_set_level(IN2, 1);
+
+    //right motor
+    gpio_set_level(IN1, 1);
+    gpio_set_level(IN2, 1);
+
+}
+
+void printVal_background(void *pvParameters){
 
     while(1){
 
@@ -286,6 +323,8 @@ void set_throttle_DC(){
     }
 
 }
+
+//////////////////////UNUSED FUNCTION PROTOTYPES/////////////////////////////
 
 void diff_calc(){
 
@@ -314,52 +353,69 @@ void diff_calc(){
 
     if(duty_steering < 282){
 
-        steering_k =  (abs(duty_steering - 282)) / (abs(80 - 282));
+        steering_k =  -((float)(282 - duty_steering)) / (282 - 80);
 
     }
 
 }
 
-void PID(){
+void ackerman(){
 
-    PID_resolution = 30;
     steering_sens = 1.5;  //change depending on duty_throttle vs duty_steering scale
-
+    
     target_speed_left = duty_throttle + (steering_sens * steering_k);
     target_speed_right = duty_throttle - (steering_sens * steering_k);
 
-    Pk_l = 2; Ik_l = 0.05; Dk_l = 1;
-    left_P = target_speed_left - duty_throttle;
-    left_I = (target_speed_left - duty_throttle) * PID_resolution;
-    left_D = (target_speed_left - duty_throttle) / PID_resolution;
+    if(target_speed_left < 0){
+
+        target_speed_left = 0;
+
+    }
+
+    if(target_speed_right > 4095){
+
+        target_speed_right = 4095;
+
+    }
+
+}
+
+void PID(int setpoint, int val){
+
+    //creates variables that don't reset after each iteration of function
+    static float old_error_left = 0;
+    static float old_error_right = 0;
+
+    //constants for each PID component, left and right
+    float Pk_l =2, Ik_l = 0.05, Dk_l = 1;
+    float Pk_r= 2, Ik_r = 0.05, Dk_r = 1;
+
+    //how fast the PID updates, also the difference in time used in calculations
+    int PID_resolution = 30;
+
+    //components of PID
+    float left_P, left_D;
+    float right_P, right_D;
+    static float left_I, right_I;
+
+    //PID total values
+    float PID_left, PID_right;
+
+    left_P = Pk_l * (left_setpoint - val);
+    left_I += Ik_l * ((left_setpoint - val) * PID_resolution);
+    left_D = Dk_l * (((left_setpoint - val) - (old_error_left)) / PID_resolution);
     PID_left = left_P + left_I + left_D;
 
-    Pk_l = 2; Ik_l = 0.05; Dk_l = 1;
-    right_P = target_speed_right - duty_throttle;
-    right_I = (target_speed_right - duty_throttle) * PID_resolution;
-    right_D = (target_speed_right - duty_throttle) / PID_resolution;
+    right_P = Pk_r * (right_setpoint - val);
+    right_I = Ik_r * ((right_setpoint - val) * PID_resolution);
+    right_D = Dk_r * (((right_setpoint - val) - (old_error_right)) / PID_resolution);
     PID_right = right_P + right_I + right_D;
 
+    old_error_left = left_P;
+    old_error_right = right_P;
+
+    output_left = PID_left;
+    output_right = PID_right;
+
     vTaskDelay(PID_resolution / portTICK_PERIOD_MS);
-}
-
-void fwd(){
-
-    gpio_set_level(IN1, 1);
-    gpio_set_level(IN2, 0);
-
-}
-
-void rev(){
-
-    gpio_set_level(IN1, 0);
-    gpio_set_level(IN2, 1); 
-
-}
-
-void brake(){
-
-    gpio_set_level(IN1, 1);
-    gpio_set_level(IN2, 1);
-
 }
