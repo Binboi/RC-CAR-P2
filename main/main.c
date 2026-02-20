@@ -10,7 +10,7 @@
 //git pull
 
 #include <stdio.h>
-#include "driver/adc.h"
+#include "esp_adc/adc_oneshot.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -26,6 +26,7 @@
 #define EN2 27
 
 int xVal, yVal, bVal;
+static adc_oneshot_unit_handle_t adc1_handle;
 int duty_steering;
 int duty_throttle;
 int angle;
@@ -35,6 +36,7 @@ float target_speed_left;
 float target_speed_right;
 
 void input_init();
+void adc_setup();
 void servo_init();
 void getVal();
 void set_steering_DC();
@@ -43,7 +45,7 @@ void printVal_background(void *pvParameters);
 void fwd();
 void rev();
 void brake();
-
+//fd
 
 ////////////UNUSED FUNCS AND VARS FOR LATER USE////////////////////
 int left_setpoint, right_setpoint;
@@ -58,6 +60,9 @@ void app_main(){
 
     //Initialize inputs
     input_init();
+
+    //Initialize oneshot ADC module
+    adc_setup();
 
     //Initialize PWM for the servo
     servo_init();
@@ -104,13 +109,13 @@ void input_init(){
     gpio_reset_pin(servo);
 
     // Set ADC width to 12 bits
-    adc1_config_width(ADC_WIDTH_BIT_12);
+    //adc1_config_width(ADC_WIDTH_BIT_12);
     
     // Configure ADC channels pin 36
-    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_12);
+    //adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_12);
 
     // Configure ADC channels pin 39
-    adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_12);
+    //adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_12);
 
     // Configure pin 14 as input for button
     gpio_set_direction(button, GPIO_MODE_INPUT);
@@ -135,6 +140,31 @@ void input_init(){
 
     //Configure pin 27 as output for IN4
     gpio_set_direction(EN2, GPIO_MODE_OUTPUT);
+
+
+}
+
+void adc_setup(){
+
+    adc_oneshot_unit_init_cfg_t init_config1 = {
+
+        .unit_id = ADC_UNIT_1,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+
+    };
+
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+
+    //Configure ADC channels
+    adc_oneshot_chan_cfg_t config = {
+
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .atten = ADC_ATTEN_DB_12,
+    };
+
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config));
+    vTaskDelay(5 / portTICK_PERIOD_MS);
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_3, &config));
 
 }
 
@@ -163,7 +193,7 @@ void servo_init(){
 
     // Setup the PWM channel for EN1 (left motor)
     ledc_channel_config_t channel_config2 = {
-        .gpio_num = EN1,
+        .gpio_num = IN1,
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = LEDC_CHANNEL_1,
         .timer_sel = LEDC_TIMER_0,
@@ -188,8 +218,8 @@ void servo_init(){
 void getVal(){
 
     // Read ADC values for pin 36 (x value) and pin 39 (y value)
-    xVal = adc1_get_raw(ADC1_CHANNEL_0);
-    yVal = adc1_get_raw(ADC1_CHANNEL_3);
+    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &xVal));
+    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_3, &yVal));
 
     // Read digital value for pin 14 (button)
     bVal = gpio_get_level(button);
