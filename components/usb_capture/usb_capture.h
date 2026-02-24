@@ -1,26 +1,27 @@
 #pragma once
-#include <stdint.h>
 
-#define MOZA_REPORT_LEN 69
+//ESP32 library for error messages
+#include "esp_err.h"
 
-//function to get packets
-typedef void (*moza_report_cb_t)(const uint8_t *data, uint16_t len);
+//force everything to be read in C code just to be safe
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+/**
+ * @brief Initialize and start the USB capture component.
+ *        Starts two internal FreeRTOS tasks:
+ *          - usb_daemon_task : handles USB host library events (device connect/disconnect)
+ *          - usb_client_task : registers as a USB host client, opens device, reads raw HID reports
+ *        Raw bytes received from the MOZA (or any HID device) are printed to the serial console.
+ */
+esp_err_t usb_capture_start(void);
 
-typedef struct {
+/**
+ * @brief Stop and clean up USB capture tasks and the USB host library.
+ */
+void usb_capture_stop(void);
 
-    uint8_t report_type;
-    uint16_t steering_raw; 
-    uint16_t throttle_raw;
-    uint16_t brake_raw;
-
-} moza_report_t;
-
-//Put the usb data into the moza_report_t struct
-typedef void (*moza_report_cb_t)(const moza_report_t *report);
-
-//Function to capture the moza data
-void usb_start_capt(moza_report_cb_t);
-
-//Function to stop moza data capture
-void stop_stop_capt(void);
+#ifdef __cplusplus
+}
+#endif
