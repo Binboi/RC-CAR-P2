@@ -1,12 +1,9 @@
-#include "moza_parser.h"
 #include <stdio.h>
+#include "moza_parser.h"
 
+//////////////////////////////////////////////////////////////////////////////
 
-// ─────────────────────────────────────────────
-//  Internal helpers
-// ─────────────────────────────────────────────
-
-// Steering: -1.0 (full left) | 0.0 (center) | 1.0 (full right)
+//steering: -1.0 (full left) and 0.0 (center) and 1.0 (full right)
 static inline float normalize_steering(uint16_t raw)
 {
     if (raw >= MOZA_STEER_CENTER) {
@@ -16,7 +13,7 @@ static inline float normalize_steering(uint16_t raw)
     }
 }
 
-// Pedals: 0.0 (released) | 1.0 (fully pressed)
+//pedals: 0.0 (released) and 1.0 (fully pressed)
 static inline float normalize_pedal(uint16_t raw)
 {
     if (raw <= MOZA_PEDAL_RELEASED){
@@ -35,9 +32,7 @@ static inline float normalize_pedal(uint16_t raw)
 }
 
 
-//////////////////////
-//Reading functions
-//////////////////////
+////functions to read the usb///////
 
 moza_input_t read_moza(const uint8_t report[], uint16_t len)
 {
@@ -46,15 +41,15 @@ moza_input_t read_moza(const uint8_t report[], uint16_t len)
     if (len < MOZA_REPORT_LEN)       return input;
     if (report[0] != MOZA_REPORT_ID) return input;
 
-    // Read raw values (big-endian: high byte first)
+    //readthe raw values (big-endian: high byte first)
     input.steering_raw = (report[MOZA_STEERING_OFFSET] << 8) | report[MOZA_STEERING_OFFSET + 1];
     input.throttle_raw = (report[MOZA_THROTTLE_OFFSET] << 8) | report[MOZA_THROTTLE_OFFSET + 1];
     input.brake_raw = (report[MOZA_BRAKE_OFFSET] << 8) | report[MOZA_BRAKE_OFFSET + 1];
 
-    // Normalize to float
+    //normalize to float
     input.steering = normalize_steering(input.steering_raw);
     input.throttle = normalize_pedal(input.throttle_raw);
-    input.brake    = normalize_pedal(input.brake_raw);
+    input.brake = normalize_pedal(input.brake_raw);
 
     return input;
 }

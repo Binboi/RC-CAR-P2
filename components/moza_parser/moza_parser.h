@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef MOZA_PARSER_H
 #define MOZA_PARSER_H
 
@@ -25,7 +27,6 @@
 
 #define MOZA_PEDAL_RELEASED  0x0080
 #define MOZA_PEDAL_MAX       0xFF7F
-
 
 //Structure for reading raw outputs and their respective mapped variables
 typedef struct {
