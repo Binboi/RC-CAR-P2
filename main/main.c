@@ -19,6 +19,7 @@
 
 #include "radio.h"
 #include "usb_capture.h"
+#include "ESP-NOW.h"
 
 // not all are used, some are for reference like adc pins (e.g: first three)
 #define adc_steering_input 18 
@@ -67,28 +68,31 @@ void PID(int setpoint, int val);
 void app_main(){
 
     //start usb protocol (printing as well)
-    usb_capture_start();
+    //usb_capture_start();
 
     //Initialize inputs
-    input_init();
+    //input_init();
 
     //Initialize oneshot ADC module
-    adc_setup();
+    //adc_setup();
 
     //Initialize PWM for the servo
-    pwm_config();
+    //pwm_config();
 
     //Initialize radio protocol
-    nrf_init();
+    //nrf_init();
 
     //Start the background car value setting process
-    xTaskCreate(setVal_TX_Background, "Live Values", 2048, NULL, 5, NULL);
+    //xTaskCreate(setVal_TX_Background, "Live Values", 2048, NULL, 5, NULL);
 
     //Delay so the follow print task has values to print
     vTaskDelay(10 / portTICK_PERIOD_MS);
 
     //Start the background printing process (with joystick)
-    xTaskCreate(printVal_Background, "Live Values", 2048, NULL, 5, NULL);
+    //xTaskCreate(printVal_Background, "Live Values", 2048, NULL, 5, NULL);
+
+    //test esp now
+    esp_wifi_init();
 
 }
 
