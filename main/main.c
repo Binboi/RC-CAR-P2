@@ -14,12 +14,17 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "freertos/queue.h"
 #include "driver/ledc.h"
 #include "usb/usb_host.h"
 
 #include "radio.h"
 #include "usb_capture.h"
 #include "ESP-NOW.h"
+#include "tusb.h"
+#include "tusb_config.h"
+#include "moza_capture.h"
 
 // not all are used, some are for reference like adc pins (e.g: first three)
 #define adc_steering_input 18 
@@ -55,6 +60,8 @@ void printVal_Background(void *pvParameters);
 void fwd();
 void rev();
 void brake();
+void ESPNOWconfig();
+void start_moza_hndshk();
 
 ////////////UNUSED FUNCS AND VARS FOR LATER USE////////////////////
 int left_setpoint, right_setpoint;
@@ -71,16 +78,13 @@ void app_main(){
     //usb_capture_start();
 
     //Initialize inputs
-    //input_init();
+    input_init();
 
     //Initialize oneshot ADC module
-    //adc_setup();
+    adc_setup();
 
     //Initialize PWM for the servo
-    //pwm_config();
-
-    //Initialize radio protocol
-    //nrf_init();
+    pwm_config();
 
     //Start the background car value setting process
     //xTaskCreate(setVal_TX_Background, "Live Values", 2048, NULL, 5, NULL);
@@ -91,15 +95,43 @@ void app_main(){
     //Start the background printing process (with joystick)
     //xTaskCreate(printVal_Background, "Live Values", 2048, NULL, 5, NULL);
 
-    //test esp now
-    esp_wifi_init();
+    ESPNOWconfig();
 
+    //start_moza_hndshk();
+    //@needs tuh_task()
+
+    while(1){
+
+        /////////ESPNOW TRANSFER///////
+        
+        getVal();
+        set_steering();
+        set_throttle();
+
+        printf("Steering: %4d, Throttle: %4d, Steering_DC: %3u, Throttle_DC: %4u     \r", 
+            steering_val, throttle_val, duty_steering, duty_throttle);
+
+        packet_t packet_drive = {
+            .str_dat = (uint16_t)duty_steering,
+            .thrt_dat = (uint16_t)duty_throttle,
+            .brk_dat = 0x00
+        };
+
+        esp_now_send(car_addr, (uint8_t *)&packet_drive, control_len);
+
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+
+
+        }
+
+    
 }
 
 //background task (setting values, radio transmits)
 void setVal_TX_Background(void *pvParameters){
 
     while(1){
+
 
         //gets the adc value (driving inputs)
         getVal();
@@ -309,7 +341,7 @@ void set_steering(){
 //Full counter clockwise: 493
 
     //Rested X values for ADC tested from serial monitor (1820 - 1840 for 3.3v)
-    if(steering_val > 2800 &&  steering_val < 2900){
+    if(steering_val > 2450 &&  steering_val < 2700){
 
         // Tested value from serial monitor
         duty_steering = 282; //Mid point: ((80 + 493) / 2)    
@@ -323,15 +355,12 @@ void set_steering(){
         //for 3.3V
         duty_steering = 80 + ((steering_val * (493 - 80)) / 4095);
 
-        //for 5.5V
-        //duty_steering = steering_val;
-
     }
 
     // Stores the new duty cycle variable in memory
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty_steering);
+    //ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty_steering);
     // Sets the steering duty cycle to "duty_steering"
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+    //ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
 }
 
@@ -339,10 +368,11 @@ void set_throttle(){
 
     //Middle of braking potentiometer
     //rest if throtthle is else because braking takes priority
-    if(brake_val > 700){
+    if(throttle_val < 2100){
 
         // More brake, less throttle duty cycle
-        duty_throttle = duty_throttle - ((brake_val * duty_throttle) / 4095);
+        uint16_t brk_coef = (4095 * (int32_t)(2100 - throttle_val)) / 2100;
+        duty_throttle = duty_throttle - ((brk_coef * duty_throttle) / 4095);
 
         //makes sure duty_throttle doesnt go negative from above calc
         //converts to signed int so it can check for negatives and make it zero
@@ -351,9 +381,9 @@ void set_throttle(){
         duty_throttle = (uint16_t)temp;
 
         //if fully pressing brakes, stop motor
-        if(brake_val > 3500){
+        if(brk_coef > 3500){
 
-            brake();
+            //brake();
             duty_throttle = 0;
 
         }
@@ -361,37 +391,37 @@ void set_throttle(){
     }
 
     //another braking condition for when no speed is applied
-    else if(throttle_val >= 2850 && throttle_val <= 2950){
+    else if(throttle_val >= 2100 && throttle_val <= 2700){
 
         duty_throttle = 0;
-        brake();
+        //brake();
 
     }
 
-    else if(throttle_val < 2850){
+    else if(throttle_val < 2100){
 
         //Maps 0-2950 to PWM duty cycle scale (0-4095)
         //duty_throttle = ((abs(2900 - throttle_val)) / 2900) * 4905; rewritten to avoid truncation
         //2900 is the more accurate rested y value
-        duty_throttle = ((abs(2900 - throttle_val)) * 4095) / 2900;
-        rev();
+        duty_throttle = ((abs(2500 - throttle_val)) * 4095) / 2500;
+        //rev();
 
     }
 
-    else if(throttle_val > 2950){
+    else if(throttle_val > 2700){
 
         //Maps 2900 - 4095 to PWM duty cycle scale (0-4095) (0 - 4095)
         //duty_throttle = ((throttle_val - 2900) / (4095 - 2900)) * 4095; rewritten to avoid truncation
         //2900 is the more accurate rested y value
-        duty_throttle = ((throttle_val - 2900) * 4095) / (4095 - 2900);
-        fwd();
+        duty_throttle = ((throttle_val - 2500) * 4095) / (4095 - 2500);
+        //fwd();
 
     }
 
     // Stores the new duty cycle variable in memory
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty_throttle);
+    //ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty_throttle);
     // Sets the throttle PWM duty cycle to "duty_throttle"
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
+    //ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
 
 }
 
@@ -407,7 +437,7 @@ void rev(){
     gpio_set_level(IN1, 0);
     gpio_set_level(IN2, 1); 
 
-}
+    }
 
 void brake(){
 
@@ -416,62 +446,22 @@ void brake(){
 
 }
 
+void start_moza_hndshk(){
+    moza_capture_init();
+
+    const tusb_rhport_init_t rh_init = {
+        .role  = TUSB_ROLE_HOST,
+        .speed = TUSB_SPEED_FULL,
+    };
+    bool ret = tusb_rhport_init(0, &rh_init);
+    printf("tusb_rhport_init result: %d\n", ret);
+
+    tuh_mount_cb(8);
+    //cb_get(xfer3);
+    cb_ctrl(tuh_control_xfer);
+    cb_set(tuh_control_xfer);
+}
 //////////////////////UNUSED FUNCTIONs, IGNOER/////////////////////////////
-
-void diff_calc(){
-
-    if(duty_steering == 80){
-
-        steering_k = -1;
-    
-    }
-
-    if(duty_steering == 493){
-
-        steering_k = 1;
-    
-    }
-
-    if(duty_steering == 282){
-
-        steering_k = 0;
-        
-    }
-
-    if(duty_steering > 282){
-
-        steering_k = (duty_steering - 282) / (493 - 282) ;
-
-    }
-
-    if(duty_steering < 282){
-
-        steering_k =  -((float)(282 - duty_steering)) / (282 - 80);
-
-    }
-
-}
-
-void ackerman(){
-
-    steering_sens = 1.5;  //change depending on duty_throttle vs duty_steering scale
-    
-    target_speed_left = duty_throttle + (steering_sens * steering_k);
-    target_speed_right = duty_throttle - (steering_sens * steering_k);
-
-    if(target_speed_left < 0){
-
-        target_speed_left = 0;
-
-    }
-
-    if(target_speed_right > 4095){
-
-        target_speed_right = 4095;
-
-    }
-
-}
 
 void PID(int setpoint, int val){
 
