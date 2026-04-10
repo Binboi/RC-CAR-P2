@@ -29,13 +29,14 @@ static inline float normalize_pedal(uint16_t raw)
     }
 
     return (float)(raw - MOZA_PEDAL_RELEASED) / (float)(MOZA_PEDAL_MAX - MOZA_PEDAL_RELEASED);
+    
 }
 
 
 ////functions to read the usb///////
 
-moza_input_t read_moza(const uint8_t report[], uint16_t len)
-{
+moza_input_t read_moza(const uint8_t report[], uint16_t len){
+
     moza_input_t input = {0};
 
     if (len < MOZA_REPORT_LEN)       return input;
@@ -54,10 +55,11 @@ moza_input_t read_moza(const uint8_t report[], uint16_t len)
     return input;
 }
 
-void moza_print(const moza_input_t input)
-{
+void moza_print(const moza_input_t input){
+
     printf("Steering: %.3f (raw: 0x%04X) | Throttle: %.3f (raw: 0x%04X) | Brake: %.3f (raw: 0x%04X)\n",
         input.steering, input.steering_raw,
         input.throttle, input.throttle_raw,
         input.brake,    input.brake_raw);
+
 }

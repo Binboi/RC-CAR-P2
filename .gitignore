@@ -1,7 +1,11 @@
 #cloud coding (github)
 build/
 .vscode/
+sdkconfig
 sdkconfig.old
+dependencies.lock
+.idf_target
+managed_components
 
 # macOS
 .DS_Store
