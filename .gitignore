@@ -2,6 +2,10 @@
 build/
 .vscode/
 sdkconfig.old
+sdkconfig
+dependencies.lock
+.idf_target
+managed_components
 
 # macOS
 .DS_Store
