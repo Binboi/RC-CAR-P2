@@ -84,7 +84,7 @@ void app_main(){
     adc_setup();
 
     //Initialize PWM for the servo
-    pwm_config();
+    //pwm_config();
 
     //Start the background car value setting process
     //xTaskCreate(setVal_TX_Background, "Live Values", 2048, NULL, 5, NULL);
@@ -108,13 +108,12 @@ void app_main(){
         set_steering();
         set_throttle();
 
-        printf("Steering: %4d, Throttle: %4d, Steering_DC: %3u, Throttle_DC: %4u     \r", 
+        printf("Steering: %d, Throttle: %d, Steering_DC: %d, Throttle_DC: %d,    \r", 
             steering_val, throttle_val, duty_steering, duty_throttle);
 
         packet_t packet_drive = {
             .str_dat = (uint16_t)duty_steering,
             .thrt_dat = (uint16_t)duty_throttle,
-            .brk_dat = 0x00
         };
 
         esp_now_send(car_addr, (uint8_t *)&packet_drive, control_len);
@@ -171,7 +170,7 @@ void printVal_Background(void *pvParameters){
     while(1){
 
         // print values with updates instead of new lines (\r vs \n)
-        printf("Steering: %4d, Throttle: %4d, Braking: %d , Steering Duty Cycle: %4d, Throttle Duty Cycle: %4d     \n", 
+        printf("Steering: %4d, Throttle: %4d, Braking: %d , Steering Duty Cycle: %3d, Throttle Duty Cycle: %3d     \n", 
             steering_val, throttle_val, brake_val, duty_steering, duty_throttle);
         
         uint8_t data[4];
@@ -293,7 +292,7 @@ void pwm_config(){
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .duty_resolution = LEDC_TIMER_12_BIT,  // 12-bit = 0-4095
         .timer_num = LEDC_TIMER_1,
-        .freq_hz = 5000,                         // 5 kHz for servos
+        .freq_hz = 244,                         //high enough for ESC, 1 us tick (1000-2000 for throttle)
         .clk_cfg = LEDC_AUTO_CLK
     };
     ledc_timer_config(&motor_timer_config);
@@ -341,10 +340,10 @@ void set_steering(){
 //Full counter clockwise: 493
 
     //Rested X values for ADC tested from serial monitor (1820 - 1840 for 3.3v)
-    if(steering_val > 2450 &&  steering_val < 2700){
+    if(steering_val > 1840 &&  steering_val < 1870){
 
         // Tested value from serial monitor
-        duty_steering = 282; //Mid point: ((80 + 493) / 2)    
+        duty_steering = 149; //Mid point: ((80 + 493) / 2)    //282
 
     }
 
@@ -353,74 +352,44 @@ void set_steering(){
         // Map the joystick x value reading to 12 bit pwm range (Trial and error extremes)
 
         //for 3.3V
-        duty_steering = 80 + ((steering_val * (493 - 80)) / 4095);
-
+        duty_steering = 103 + ((steering_val * (195 - 103)) / 4095);
+    
     }
 
     // Stores the new duty cycle variable in memory
-    //ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty_steering);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty_steering);
     // Sets the steering duty cycle to "duty_steering"
-    //ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 
 }
 
 void set_throttle(){
 
-    //Middle of braking potentiometer
-    //rest if throtthle is else because braking takes priority
-    if(throttle_val < 2100){
+    //FORWARD THROTTLE MAPPING
+    if(throttle_val > 1890){
 
-        // More brake, less throttle duty cycle
-        uint16_t brk_coef = (4095 * (int32_t)(2100 - throttle_val)) / 2100;
-        duty_throttle = duty_throttle - ((brk_coef * duty_throttle) / 4095);
+        float scratch = (float)(throttle_val - 1890) / (4095 - 1890);
+        duty_throttle = scratch * (410-307) + 307;
+        
+    }
 
-        //makes sure duty_throttle doesnt go negative from above calc
-        //converts to signed int so it can check for negatives and make it zero
-        int32_t temp = duty_throttle;
-        if(temp < 0){ temp = 0; }
-        duty_throttle = (uint16_t)temp;
+    //REVERSE THROTTLE MAPPING
+    else if (throttle_val < 1860){
 
-        //if fully pressing brakes, stop motor
-        if(brk_coef > 3500){
-
-            //brake();
-            duty_throttle = 0;
-
-        }
+        float scratch = (float)(1860 - throttle_val) / 1860;
+        duty_throttle = 307 - scratch * (307-205);
 
     }
 
-    //another braking condition for when no speed is applied
-    else if(throttle_val >= 2100 && throttle_val <= 2700){
+    //NEUTRAL THROTTLE MAPPING
 
-        duty_throttle = 0;
-        //brake();
+    else{
 
-    }
-
-    else if(throttle_val < 2100){
-
-        //Maps 0-2950 to PWM duty cycle scale (0-4095)
-        //duty_throttle = ((abs(2900 - throttle_val)) / 2900) * 4905; rewritten to avoid truncation
-        //2900 is the more accurate rested y value
-        duty_throttle = ((abs(2500 - throttle_val)) * 4095) / 2500;
-        //rev();
+        duty_throttle = 307;
 
     }
 
-    else if(throttle_val > 2700){
-
-        //Maps 2900 - 4095 to PWM duty cycle scale (0-4095) (0 - 4095)
-        //duty_throttle = ((throttle_val - 2900) / (4095 - 2900)) * 4095; rewritten to avoid truncation
-        //2900 is the more accurate rested y value
-        duty_throttle = ((throttle_val - 2500) * 4095) / (4095 - 2500);
-        //fwd();
-
-    }
-
-    // Stores the new duty cycle variable in memory
     //ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty_throttle);
-    // Sets the throttle PWM duty cycle to "duty_throttle"
     //ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1);
 
 }

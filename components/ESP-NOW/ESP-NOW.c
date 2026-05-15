@@ -2,7 +2,7 @@
 #include "ESP-NOW.h"
 
 const uint8_t car_addr[6] = {0xF4, 0x65, 0x0B, 0xBB, 0x77, 0xF8};
-size_t control_len = 6;
+size_t control_len = 4;
 packet_t packet_drive_rcv;
 
 void ESPNOWconfig(){

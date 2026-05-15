@@ -1,8 +1,8 @@
 #cloud coding (github)
 build/
 .vscode/
-sdkconfig
 sdkconfig.old
+sdkconfig
 dependencies.lock
 .idf_target
 managed_components
